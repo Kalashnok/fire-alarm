@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createMqttClient, disconnectMqttClient, subscribeToTopic, publishMessage } from '../utils/mqttClient';
+import { connect, disconnect, publish, subscribe, unsubscribe, isConnected } from '../utils/mqttClient';
 
 // Define MQTT configuration type
 export interface MqttConfig {
@@ -174,97 +174,59 @@ export const MqttProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Use provided config or saved config
       const configToUse = config || mqttConfig;
       
-      const client = await createMqttClient(configToUse);
-
-      if (client) {
-        client.on('connect', () => {
-          console.log('Connected to MQTT broker');
-          setMqttConnected(true);
+      await connect(configToUse);
+      setMqttConnected(true);
+      
+      // Subscribe to device status topics
+      devices.forEach(device => {
+        subscribe(`devices/${device.id}/status`, (message: string) => {
+          const status = message;
+          const timestamp = new Date().toISOString();
           
-          // Subscribe to device status topics
-          devices.forEach(device => {
-            subscribeToTopic(`devices/${device.id}/status`, { qos: 1 }, (err: Error | null) => {
-              if (err) {
-                console.error(`Error subscribing to device ${device.id} status:`, err);
-              }
-            });
-          });
-
-          // Subscribe to alarm topics
-          devices.forEach(device => {
-            subscribeToTopic(`devices/${device.id}/alarm`, { qos: 1 }, (err: Error | null) => {
-              if (err) {
-                console.error(`Error subscribing to device ${device.id} alarm:`, err);
-              }
-            });
-          });
+          setDevices(prevDevices => 
+            prevDevices.map(d => 
+              d.id === device.id 
+                ? { ...d, status: status as Device['status'], lastUpdated: timestamp }
+                : d
+            )
+          );
         });
+      });
 
-        client.on('message', (topic: string, message: Buffer) => {
-          console.log('Received message:', topic, message.toString());
+      // Subscribe to alarm topics
+      devices.forEach(device => {
+        subscribe(`devices/${device.id}/alarm`, (message: string) => {
+          const alarmMessage = message;
+          const newAlarm: Alarm = {
+            id: `${device.id}-${Date.now()}`,
+            deviceId: device.id,
+            deviceName: device.name,
+            message: alarmMessage,
+            timestamp: new Date().toISOString(),
+            acknowledged: false,
+          };
           
-          // Handle device status updates
-          if (topic.match(/devices\/\d+\/status/)) {
-            const deviceId = topic.split('/')[1];
-            const status = message.toString();
-            const timestamp = new Date().toISOString();
-            
-            setDevices(prevDevices => 
-              prevDevices.map(device => 
-                device.id === deviceId 
-                  ? { ...device, status: status as Device['status'], lastUpdated: timestamp }
-                  : device
-              )
+          setAlarms(prevAlarms => [newAlarm, ...prevAlarms]);
+          
+          // Show alert for new alarms
+          if (Platform.OS === 'web') {
+            // For web, use browser alert
+            alert(`ALARM: ${device.name} - ${alarmMessage}`);
+          } else {
+            // For mobile, use React Native Alert
+            Alert.alert(
+              'Fire Alarm Alert',
+              `${device.name}: ${alarmMessage}`,
+              [
+                { 
+                  text: 'Acknowledge', 
+                  onPress: () => acknowledgeAlarm(newAlarm.id)
+                }
+              ]
             );
           }
-          
-          // Handle alarm messages
-          if (topic.match(/devices\/\d+\/alarm/)) {
-            const deviceId = topic.split('/')[1];
-            const device = devices.find(d => d.id === deviceId);
-            
-            if (device) {
-              const alarmMessage = message.toString();
-              const newAlarm: Alarm = {
-                id: `${deviceId}-${Date.now()}`,
-                deviceId,
-                deviceName: device.name,
-                message: alarmMessage,
-                timestamp: new Date().toISOString(),
-                acknowledged: false,
-              };
-              
-              setAlarms(prevAlarms => [newAlarm, ...prevAlarms]);
-              
-              // Show alert for new alarms
-              if (Platform.OS === 'web') {
-                // For web, use browser alert
-                alert(`ALARM: ${device.name} - ${alarmMessage}`);
-              } else {
-                // For mobile, use React Native Alert
-                Alert.alert(
-                  'Fire Alarm Alert',
-                  `${device.name}: ${alarmMessage}`,
-                  [
-                    { 
-                      text: 'Acknowledge', 
-                      onPress: () => acknowledgeAlarm(newAlarm.id) 
-                    },
-                    { 
-                      text: 'OK' 
-                    }
-                  ]
-                );
-              }
-            }
-          }
         });
-
-        client.on('error', (err: Error) => {
-          console.error('MQTT error:', err);
-          setMqttConnected(false);
-        });
-      }
+      });
     } catch (error) {
       console.error('Error connecting to MQTT:', error);
       setMqttConnected(false);
@@ -273,79 +235,89 @@ export const MqttProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Disconnect from MQTT broker
   const disconnectMqtt = () => {
-    disconnectMqttClient();
+    disconnect();
     setMqttConnected(false);
   };
 
   // Update MQTT configuration
   const updateMqttConfig = (config: Partial<MqttConfig>) => {
-    setMqttConfig(prevConfig => ({ ...prevConfig, ...config }));
+    setMqttConfig(prev => ({ ...prev, ...config }));
   };
 
   // Add a new device
   const addDevice = (device: Omit<Device, 'lastUpdated'>) => {
-    const newDevice: Device = {
+    const newDevice = {
       ...device,
       lastUpdated: new Date().toISOString(),
     };
     
-    setDevices(prevDevices => [...prevDevices, newDevice]);
+    setDevices(prev => [...prev, newDevice]);
     
     // Subscribe to device topics if connected
     if (mqttConnected) {
-      subscribeToTopic(`devices/${device.id}/status`, { qos: 1 });
-      subscribeToTopic(`devices/${device.id}/alarm`, { qos: 1 });
+      subscribe(`devices/${device.id}/status`, (message: string) => {
+        const status = message;
+        const timestamp = new Date().toISOString();
+        
+        setDevices(prevDevices => 
+          prevDevices.map(d => 
+            d.id === device.id 
+              ? { ...d, status: status as Device['status'], lastUpdated: timestamp }
+              : d
+          )
+        );
+      });
+      
+      subscribe(`devices/${device.id}/alarm`, (message: string) => {
+        const alarmMessage = message;
+        const newAlarm: Alarm = {
+          id: `${device.id}-${Date.now()}`,
+          deviceId: device.id,
+          deviceName: device.name,
+          message: alarmMessage,
+          timestamp: new Date().toISOString(),
+          acknowledged: false,
+        };
+        
+        setAlarms(prevAlarms => [newAlarm, ...prevAlarms]);
+      });
     }
   };
 
   // Remove a device
   const removeDevice = (deviceId: string) => {
-    setDevices(prevDevices => prevDevices.filter(device => device.id !== deviceId));
+    setDevices(prev => prev.filter(device => device.id !== deviceId));
+    // Unsubscribe from device topics
+    unsubscribe(`devices/${deviceId}/status`);
+    unsubscribe(`devices/${deviceId}/alarm`);
   };
 
   // Acknowledge an alarm
   const acknowledgeAlarm = (alarmId: string) => {
-    setAlarms(prevAlarms => 
-      prevAlarms.map(alarm => 
-        alarm.id === alarmId ? { ...alarm, acknowledged: true } : alarm
+    setAlarms(prev => 
+      prev.map(alarm => 
+        alarm.id === alarmId 
+          ? { ...alarm, acknowledged: true }
+          : alarm
       )
     );
   };
 
   // Test alarm function
   const testAlarm = () => {
-    const testDevice = devices[0];
-    if (testDevice) {
-      const newAlarm: Alarm = {
-        id: `test-${Date.now()}`,
-        deviceId: testDevice.id,
-        deviceName: testDevice.name,
-        message: 'Test alarm - This is a simulated fire alarm',
-        timestamp: new Date().toISOString(),
-        acknowledged: false,
-      };
-      
-      setAlarms(prevAlarms => [newAlarm, ...prevAlarms]);
-      
-      // Show alert for test alarm
-      if (Platform.OS === 'web') {
-        alert(`TEST ALARM: ${testDevice.name} - Test alarm - This is a simulated fire alarm`);
-      } else {
-        Alert.alert(
-          'Test Fire Alarm Alert',
-          `${testDevice.name}: Test alarm - This is a simulated fire alarm`,
-          [
-            { 
-              text: 'Acknowledge', 
-              onPress: () => acknowledgeAlarm(newAlarm.id) 
-            },
-            { 
-              text: 'OK' 
-            }
-          ]
-        );
-      }
+    if (!mqttConnected) {
+      Alert.alert('Error', 'Not connected to MQTT broker');
+      return;
     }
+
+    const testDevice = devices[0];
+    if (!testDevice) {
+      Alert.alert('Error', 'No devices available for test');
+      return;
+    }
+
+    const testMessage = 'Test alarm message';
+    publish(`devices/${testDevice.id}/alarm`, testMessage);
   };
 
   return (
@@ -369,5 +341,4 @@ export const MqttProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
-// Custom hook to use the MQTT context
 export const useMqtt = () => useContext(MqttContext); 
