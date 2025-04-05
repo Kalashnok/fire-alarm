@@ -5,66 +5,59 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useMqtt } from '../contexts/MqttContext';
 
 interface DeviceCardProps {
-  device: {
-    id: string;
-    name: string;
-    location: string;
-    lastUpdate?: Date;
-    isAlarming: boolean;
-  };
-  onRemove: () => void;
+  name: string;
+  status: string;
+  location: string;
+  lastUpdated?: Date;
+  onPress?: () => void;
 }
 
-export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onRemove }) => {
+export const DeviceCard: React.FC<DeviceCardProps> = ({ name, status, location, lastUpdated, onPress }) => {
   const { acknowledgeAlarm } = useMqtt();
 
   // Check if device was updated in the last minute
   const isRecentlyUpdated = () => {
-    if (!device.lastUpdate) return false;
+    if (!lastUpdated) return false;
     const now = new Date();
-    const lastUpdate = new Date(device.lastUpdate);
+    const lastUpdate = new Date(lastUpdated);
     const diffInSeconds = (now.getTime() - lastUpdate.getTime()) / 1000;
     return diffInSeconds < 60;
   };
 
   // Get status color based on device state
   const getStatusColor = () => {
-    if (device.isAlarming) return '#ff4444'; // Red for alarm
-    if (isRecentlyUpdated()) return '#4CAF50'; // Green for recently updated
-    return '#9e9e9e'; // Grey for inactive
+    if (status === 'alarm') return colors.statusError; // Red for alarm
+    if (isRecentlyUpdated()) return colors.statusActive; // Green for recently updated
+    return colors.textSecondary; // Grey for inactive
   };
 
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.titleContainer}>
-          <MaterialIcons 
+          <MaterialIcons
             name="sensors" 
-            size={24} 
+            size={24}
             color={getStatusColor()} 
-            style={styles.icon}
           />
-          <Text style={styles.name}>{device.name}</Text>
+          <Text style={styles.name}>{name}</Text>
         </View>
-        <TouchableOpacity onPress={onRemove} style={styles.removeButton}>
-          <MaterialIcons name="delete" size={20} color="#ff4444" />
-        </TouchableOpacity>
       </View>
       
-      <Text style={styles.location}>{device.location}</Text>
+      <Text style={styles.location}>{location}</Text>
       
-      {device.isAlarming && (
+      {status === 'alarm' && (
         <TouchableOpacity 
           style={styles.alarmButton}
-          onPress={() => acknowledgeAlarm(device.id)}
+          onPress={onPress}
         >
           <Text style={styles.alarmButtonText}>Acknowledge Alarm</Text>
         </TouchableOpacity>
       )}
       
-      {device.lastUpdate && (
+      {lastUpdated && (
         <Text style={styles.lastUpdate}>
-          Last update: {new Date(device.lastUpdate).toLocaleTimeString()}
+          Last update: {new Date(lastUpdated).toLocaleTimeString()}
         </Text>
       )}
     </View>
@@ -73,57 +66,52 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onRemove }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 16,
-    marginVertical: 8,
-    marginHorizontal: 16,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginVertical: spacing.sm,
+    marginHorizontal: spacing.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   } as ViewStyle,
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   } as ViewStyle,
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   } as ViewStyle,
-  icon: {
-    marginRight: 8,
-  } as ViewStyle,
   name: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333',
+    fontSize: typography.subheader.fontSize,
+    fontWeight: typography.subheader.fontWeight,
+    color: colors.textPrimary,
+    marginLeft: spacing.sm,
   } as TextStyle,
   location: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 8,
+    fontSize: typography.body.fontSize,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
   } as TextStyle,
-  removeButton: {
-    padding: 4,
-  } as ViewStyle,
   alarmButton: {
-    backgroundColor: '#ff4444',
-    padding: 8,
-    borderRadius: 4,
-    marginTop: 8,
+    backgroundColor: colors.statusError,
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginTop: spacing.sm,
   } as ViewStyle,
   alarmButtonText: {
-    color: '#ffffff',
+    color: colors.textPrimary,
     textAlign: 'center',
-    fontWeight: 'bold',
+    fontWeight: '600',
   } as TextStyle,
   lastUpdate: {
-    fontSize: 12,
-    color: '#999999',
-    marginTop: 8,
+    fontSize: typography.caption.fontSize,
+    color: colors.textTertiary,
+    marginTop: spacing.sm,
   } as TextStyle,
 }); 

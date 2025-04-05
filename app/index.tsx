@@ -16,10 +16,7 @@ export default function DevicesScreen() {
 
   const handleAddDevice = () => {
     if (newDevice.id && newDevice.name) {
-      addDevice({
-        ...newDevice,
-        status: 'inactive',
-      });
+      addDevice(newDevice);
       setNewDevice({ id: '', name: '', location: '' });
       setIsAddDeviceModalVisible(false);
     }
@@ -64,7 +61,7 @@ export default function DevicesScreen() {
               </Text>
               <TouchableOpacity
                 style={styles.acknowledgeButton}
-                onPress={() => handleAcknowledgeAlarm(alarm.id)}
+                onPress={() => handleAcknowledgeAlarm(alarm.deviceId)}
               >
                 <Text style={styles.acknowledgeButtonText}>Acknowledge</Text>
               </TouchableOpacity>
@@ -81,7 +78,7 @@ export default function DevicesScreen() {
             name={device.name}
             status={device.status}
             location={device.location}
-            lastUpdated={device.lastUpdated}
+            lastUpdated={device.lastUpdate}
             onPress={() => {
               console.log('Device pressed:', device.id);
             }}

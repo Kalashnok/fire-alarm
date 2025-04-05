@@ -9,11 +9,14 @@ interface Device {
   name: string;
   location: string;
   lastUpdate?: Date;
-  isAlarming: boolean;
+  status: string;
 }
 
 interface Alarm {
+  id: string;
   deviceId: string;
+  deviceName: string;
+  message: string;
   timestamp: Date;
   acknowledged: boolean;
 }
@@ -30,13 +33,15 @@ interface MqttContextType {
   devices: Device[];
   alarms: Alarm[];
   isConnected: boolean;
+  mqttConnected: boolean; // Alias for isConnected for backward compatibility
   mqttConfig: MqttConfig;
   connect: (config: MqttConfig) => Promise<void>;
   disconnect: () => void;
-  addDevice: (device: Omit<Device, 'lastUpdate' | 'isAlarming'>) => void;
+  addDevice: (device: Omit<Device, 'lastUpdate' | 'status'>) => void;
   removeDevice: (deviceId: string) => void;
   acknowledgeAlarm: (deviceId: string) => void;
   updateMqttConfig: (config: Partial<MqttConfig>) => void;
+  testAlarm: () => void;
 }
 
 // Create the context with default values
@@ -44,6 +49,7 @@ const MqttContext = createContext<MqttContextType>({
   devices: [],
   alarms: [],
   isConnected: false,
+  mqttConnected: false,
   mqttConfig: {
     host: 'broker.emqx.io',
     port: 8083,
@@ -55,6 +61,7 @@ const MqttContext = createContext<MqttContextType>({
   removeDevice: () => {},
   acknowledgeAlarm: () => {},
   updateMqttConfig: () => {},
+  testAlarm: () => {},
 });
 
 // Create a provider component
@@ -119,11 +126,14 @@ export const MqttProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const isAlarming = message.toLowerCase().includes('alarm');
           
           // If device is alarming, add to alarms list
-          if (isAlarming && !device.isAlarming) {
+          if (isAlarming && device.status !== 'alarm') {
             setAlarms(prevAlarms => [
               ...prevAlarms,
               {
+                id: Math.random().toString(36).substring(2, 9),
                 deviceId,
+                deviceName: device.name,
+                message,
                 timestamp: new Date(),
                 acknowledged: false,
               },
@@ -149,7 +159,7 @@ export const MqttProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return {
             ...device,
             lastUpdate: new Date(),
-            isAlarming,
+            status: isAlarming ? 'alarm' : 'active',
           };
         }
         return device;
@@ -182,11 +192,11 @@ export const MqttProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Add a new device
-  const addDevice = (device: Omit<Device, 'lastUpdate' | 'isAlarming'>) => {
+  const addDevice = (device: Omit<Device, 'lastUpdate' | 'status'>) => {
     const newDevice: Device = {
       ...device,
       lastUpdate: new Date(),
-      isAlarming: false,
+      status: 'inactive',
     };
     
     setDevices(prevDevices => [...prevDevices, newDevice]);
@@ -219,7 +229,7 @@ export const MqttProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setDevices(prevDevices =>
       prevDevices.map(device =>
-        device.id === deviceId ? { ...device, isAlarming: false } : device
+        device.id === deviceId ? { ...device, status: 'active' } : device
       )
     );
   };
@@ -236,6 +246,7 @@ export const MqttProvider: React.FC<{ children: React.ReactNode }> = ({ children
         devices,
         alarms,
         isConnected,
+        mqttConnected: isConnected,
         mqttConfig,
         connect,
         disconnect,
@@ -243,6 +254,13 @@ export const MqttProvider: React.FC<{ children: React.ReactNode }> = ({ children
         removeDevice,
         acknowledgeAlarm,
         updateMqttConfig,
+        testAlarm: () => {
+          // Simulate a test alarm
+          const testDevice = devices[0];
+          if (testDevice) {
+            handleDeviceStatus(testDevice.id, 'TEST ALARM');
+          }
+        },
       }}
     >
       {children}
