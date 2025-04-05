@@ -1,7 +1,7 @@
 import { Tabs, Redirect } from 'expo-router';
 import { MqttProvider } from '../contexts/MqttContext';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from './styles/theme';
+import { colors } from '../styles/theme';
 
 export default function AppLayout() {
   return (
@@ -27,7 +27,7 @@ export default function AppLayout() {
           name="index"
           options={{
             title: 'Devices',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color, size }: { color: string; size: number }) => (
               <MaterialIcons name="devices" size={size} color={color} />
             ),
           }}
@@ -36,15 +36,9 @@ export default function AppLayout() {
           name="settings"
           options={{
             title: 'Settings',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color, size }: { color: string; size: number }) => (
               <MaterialIcons name="settings" size={size} color={color} />
             ),
-          }}
-        />
-        <Tabs.Screen
-          name="[...unmatched]"
-          options={{
-            href: null, // This hides the tab
           }}
         />
       </Tabs>

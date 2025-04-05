@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { colors, spacing, typography } from './styles/theme';
+import { colors, spacing, typography } from '../styles/theme';
 import { useMqtt } from '../contexts/MqttContext';
 
 export default function SettingsScreen() {
-  const { mqttConfig, updateMqttConfig, connectMqtt, disconnectMqtt, mqttConnected, testAlarm } = useMqtt();
+  const { mqttConfig, updateMqttConfig, connect, disconnect, mqttConnected, testAlarm } = useMqtt();
   const [tempConfig, setTempConfig] = useState(mqttConfig);
 
   const handleUpdateConfig = async () => {
@@ -12,9 +12,9 @@ export default function SettingsScreen() {
     
     // Reconnect with new configuration
     if (mqttConnected) {
-      disconnectMqtt();
+      disconnect();
     }
-    await connectMqtt(tempConfig);
+    await connect(tempConfig);
   };
 
   const handleTestAlarm = () => {
@@ -53,7 +53,7 @@ export default function SettingsScreen() {
           <TextInput
             style={styles.input}
             value={tempConfig.host}
-            onChangeText={(text) => setTempConfig(prev => ({ ...prev, host: text }))}
+            onChangeText={(text) => setTempConfig((prev: typeof mqttConfig) => ({ ...prev, host: text }))}
             placeholder="MQTT Broker Host"
             placeholderTextColor={colors.textTertiary}
           />
@@ -64,7 +64,7 @@ export default function SettingsScreen() {
           <TextInput
             style={styles.input}
             value={tempConfig.port.toString()}
-            onChangeText={(text) => setTempConfig(prev => ({ ...prev, port: parseInt(text) || prev.port }))}
+            onChangeText={(text) => setTempConfig((prev: typeof mqttConfig) => ({ ...prev, port: parseInt(text) || prev.port }))}
             placeholder="MQTT Broker Port"
             placeholderTextColor={colors.textTertiary}
             keyboardType="numeric"
@@ -76,7 +76,7 @@ export default function SettingsScreen() {
           <TextInput
             style={styles.input}
             value={tempConfig.clientId}
-            onChangeText={(text) => setTempConfig(prev => ({ ...prev, clientId: text }))}
+            onChangeText={(text) => setTempConfig((prev: typeof mqttConfig) => ({ ...prev, clientId: text }))}
             placeholder="Client ID"
             placeholderTextColor={colors.textTertiary}
           />
@@ -87,7 +87,7 @@ export default function SettingsScreen() {
           <TextInput
             style={styles.input}
             value={tempConfig.username}
-            onChangeText={(text) => setTempConfig(prev => ({ ...prev, username: text }))}
+            onChangeText={(text) => setTempConfig((prev: typeof mqttConfig) => ({ ...prev, username: text }))}
             placeholder="Username"
             placeholderTextColor={colors.textTertiary}
           />
@@ -98,7 +98,7 @@ export default function SettingsScreen() {
           <TextInput
             style={styles.input}
             value={tempConfig.password}
-            onChangeText={(text) => setTempConfig(prev => ({ ...prev, password: text }))}
+            onChangeText={(text) => setTempConfig((prev: typeof mqttConfig) => ({ ...prev, password: text }))}
             placeholder="Password"
             placeholderTextColor={colors.textTertiary}
             secureTextEntry
@@ -107,7 +107,7 @@ export default function SettingsScreen() {
         
         <TouchableOpacity
           style={[styles.button, mqttConnected ? styles.disconnectButton : styles.connectButton]}
-          onPress={mqttConnected ? disconnectMqtt : handleUpdateConfig}
+          onPress={mqttConnected ? disconnect : handleUpdateConfig}
         >
           <Text style={styles.buttonText}>
             {mqttConnected ? 'Disconnect' : 'Connect'}

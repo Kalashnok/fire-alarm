@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Modal, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { DeviceCard } from '../components/DeviceCard';
-import { colors, spacing, typography } from './styles/theme';
+import { colors, spacing, typography } from '../styles/theme';
 import { useMqtt } from '../contexts/MqttContext';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -23,7 +23,7 @@ export default function DevicesScreen() {
   };
 
   // Get active alarms (not acknowledged)
-  const activeAlarms = alarms.filter(alarm => !alarm.acknowledged);
+  const activeAlarms = alarms.filter((alarm: { acknowledged: boolean }) => !alarm.acknowledged);
 
   // Handle alarm acknowledgment
   const handleAcknowledgeAlarm = (alarmId: string) => {
@@ -49,7 +49,7 @@ export default function DevicesScreen() {
       {activeAlarms.length > 0 && (
         <View style={styles.alarmsSection}>
           <Text style={styles.sectionTitle}>Active Alarms</Text>
-          {activeAlarms.map((alarm) => (
+          {activeAlarms.map((alarm: { id: string; deviceId: string; deviceName: string; message: string; timestamp: Date }) => (
             <View key={alarm.id} style={styles.alarmCard}>
               <View style={styles.alarmHeader}>
                 <MaterialIcons name="warning" size={24} color={colors.statusError} />
@@ -72,15 +72,18 @@ export default function DevicesScreen() {
       
       <View style={styles.deviceList}>
         <Text style={styles.sectionTitle}>Connected Devices</Text>
-        {devices.map((device) => (
+        {devices.map((device: { id: string; name: string; status: string; location: string; lastUpdate?: Date }) => (
           <DeviceCard
             key={device.id}
+            id={device.id}
             name={device.name}
             status={device.status}
             location={device.location}
             lastUpdated={device.lastUpdate}
             onPress={() => {
-              console.log('Device pressed:', device.id);
+              if (device.status === 'alarm') {
+                handleAcknowledgeAlarm(device.id);
+              }
             }}
           />
         ))}
@@ -151,12 +154,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.header.fontSize,
     fontWeight: typography.header.fontWeight,
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     marginBottom: spacing.sm,
   },
   subtitle: {
     fontSize: typography.body.fontSize,
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     opacity: 0.8,
   },
   sectionTitle: {
@@ -185,7 +188,7 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 3.84,
     elevation: 5,
   },
@@ -224,10 +227,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   modalContent: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.cardBackground,
     borderRadius: 12,
     padding: spacing.lg,
     width: '80%',

@@ -1,4 +1,6 @@
 import { Platform } from 'react-native';
+// Import the correct MQTT library for React Native
+import MQTT from 'react-native-mqtt';
 
 // Define a simple interface for our MQTT client
 interface MqttClient {
@@ -8,6 +10,24 @@ interface MqttClient {
   subscribe(topic: string, callback: (message: string) => void): void;
   unsubscribe(topic: string): void;
   isConnected(): boolean;
+}
+
+// Define types for the MQTT client
+interface MqttClientInstance {
+  onConnect: () => void;
+  onConnectionLost: (error: Error) => void;
+  onMessageArrived: (message: MqttMessage) => void;
+  connect: () => void;
+  disconnect: () => void;
+  publish: (topic: string, message: string) => void;
+  subscribe: (topic: string) => void;
+  unsubscribe: (topic: string) => void;
+  isConnected: () => boolean;
+}
+
+interface MqttMessage {
+  destinationName: string;
+  payloadString: string;
 }
 
 // Create a browser-compatible MQTT client
@@ -125,31 +145,115 @@ const createBrowserMqttClient = (config: {
   };
 };
 
-// Create a mock MQTT client for non-web platforms
-const createMockMqttClient = (): MqttClient => {
-  console.log('Using mock MQTT client for non-web platform');
+// Create a native MQTT client for Android/iOS
+const createNativeMqttClient = (config: {
+  host: string;
+  port: number;
+  clientId: string;
+  username?: string;
+  password?: string;
+}): MqttClient => {
+  console.log('Using native MQTT client for mobile platform');
+  
+  let client: MqttClientInstance | null = null;
+  let messageCallbacks: Record<string, (message: string) => void> = {};
+  
+  const connect = async (): Promise<void> => {
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const { host, port, clientId, username, password } = config;
+        
+        // For native platforms, use TCP connection
+        // Note: For Android, we typically use port 1883 for non-TLS
+        const url = `mqtt://${host}:${port}`;
+        console.log(`Connecting to MQTT broker at ${url}`);
+        
+        // Initialize the MQTT client
+        MQTT.createClient({
+          uri: url,
+          clientId,
+          auth: username ? { user: username, pass: password || '' } : undefined,
+          automaticReconnect: true,
+        }).then((clientInstance: MqttClientInstance) => {
+          client = clientInstance;
+          
+          client.onConnect = () => {
+            console.log('MQTT Connected (Native)');
+            resolve();
+          };
+          
+          client.onConnectionLost = (error: Error) => {
+            console.error('MQTT Connection lost (Native):', error);
+            client = null;
+          };
+          
+          client.onMessageArrived = (message: MqttMessage) => {
+            const topic = message.destinationName;
+            const payload = message.payloadString;
+            console.log(`MQTT Message received (Native): ${topic} - ${payload}`);
+            
+            const callback = messageCallbacks[topic];
+            if (callback) {
+              callback(payload);
+            }
+          };
+          
+          client.connect();
+        }).catch((error: Error) => {
+          console.error('Failed to create MQTT client (Native):', error);
+          reject(error);
+        });
+      } catch (error) {
+        console.error('MQTT Connection error (Native):', error);
+        reject(error);
+      }
+    });
+  };
+  
+  const disconnect = () => {
+    if (client) {
+      client.disconnect();
+      client = null;
+    }
+  };
+  
+  const publish = (topic: string, message: string) => {
+    if (!client) {
+      throw new Error('MQTT client not connected');
+    }
+    console.log(`MQTT Publishing (Native): ${topic} - ${message}`);
+    client.publish(topic, message);
+  };
+  
+  const subscribe = (topic: string, callback: (message: string) => void) => {
+    if (!client) {
+      throw new Error('MQTT client not connected');
+    }
+    console.log(`MQTT Subscribing (Native): ${topic}`);
+    client.subscribe(topic);
+    messageCallbacks[topic] = callback;
+  };
+  
+  const unsubscribe = (topic: string) => {
+    if (!client) {
+      throw new Error('MQTT client not connected');
+    }
+    console.log(`MQTT Unsubscribing (Native): ${topic}`);
+    client.unsubscribe(topic);
+    delete messageCallbacks[topic];
+  };
+  
+  const isConnected = () => {
+    return client?.isConnected() || false;
+  };
   
   return {
-    connect: async (): Promise<void> => {
-      console.log('Mock MQTT: Connected');
-    },
-    disconnect: () => {
-      console.log('Mock MQTT: Disconnected');
-    },
-    publish: (topic: string, message: string) => {
-      console.log(`Mock MQTT: Published to ${topic}: ${message}`);
-    },
-    subscribe: (topic: string, callback: (message: string) => void) => {
-      console.log(`Mock MQTT: Subscribed to ${topic}`);
-      // Simulate receiving messages
-      setTimeout(() => {
-        callback(`Mock message for ${topic}`);
-      }, 1000);
-    },
-    unsubscribe: (topic: string) => {
-      console.log(`Mock MQTT: Unsubscribed from ${topic}`);
-    },
-    isConnected: () => true,
+    connect,
+    disconnect,
+    publish,
+    subscribe,
+    unsubscribe,
+    isConnected,
   };
 };
 
@@ -174,10 +278,14 @@ export const connect = (config: {
           reject(error);
         });
       } else {
-        // For non-web platforms, use a mock client
-        mqttClient = createMockMqttClient();
-        mqttClient.connect();
-        resolve();
+        // For mobile platforms, use the native MQTT client
+        mqttClient = createNativeMqttClient(config);
+        mqttClient.connect().then(() => {
+          resolve();
+        }).catch((error: Error) => {
+          console.error('Failed to connect to MQTT:', error);
+          reject(error);
+        });
       }
     } catch (error) {
       console.error('MQTT Connection error:', error);
